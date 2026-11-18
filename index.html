@@ -825,6 +825,8 @@ button.mc:active{background:var(--l2)}
 .add{flex:none;width:48px;height:48px;display:grid;place-items:center;background:none;border:0;border-radius:12px;color:var(--strong);padding:0}
 .add svg{width:28px;height:28px}
 .add.on{color:var(--brand)}
+.pick{flex:none;width:48px;height:48px;display:grid;place-items:center;color:var(--brand)}
+.pick svg{width:26px;height:26px}
 .add:active{background:var(--l4)}
 .none{padding:40px 24px;text-align:center;font:400 17px var(--sans);color:var(--muted)}
 
@@ -2854,13 +2856,16 @@ const SCAT = {crypto:['Crypto','coin'], forex:['Forex','major pair'], stocks:['S
 $('#sClose').innerHTML = I.x;
 $('#sTabs').innerHTML = STABS.map(([k,l]) => `<button class="stab" role="tab" data-a="stab:${k}">${l}</button>`).join('');
 const srow = i => {
-  const [cat, sub] = SCAT[i.c], on = state.fav.has(i.s);
+  const [cat, sub] = SCAT[i.c], on = state.fav.has(i.s), sw = state.sMode === 'switch', cur = sw && i.s === state.inst;
+  // switching from an instrument screen only picks one: no add-to-watchlist control, the current one gets a check
+  const end = sw ? `<span class="pick" aria-hidden="true">${cur ? I.check : ''}</span>`
+    : `<button class="add${on?' on':''}" data-a="fav:${i.s}" aria-label="${on?'Remove from':'Add to'} favorites">${on ? I.check : I.plus}</button>`;
   return `
-  <div class="srow${state.sMode === 'switch' && i.s === state.inst ? ' cur' : ''}" role="button" data-a="open:${i.s}">
+  <div class="srow${cur ? ' cur' : ''}" role="button" data-a="open:${i.s}"${cur ? ' aria-current="true"' : ''}>
     ${icon(i)}
     <span class="nm"><span class="sym">${i.s}</span><span class="desc">${i.d}</span></span>
     <span class="cat"><b>${cat}</b><span>${sub}</span></span>
-    <button class="add${on?' on':''}" data-a="fav:${i.s}" aria-label="${on?'Remove from':'Add to'} favorites">${on ? I.check : I.plus}</button>
+    ${end}
   </div>`;
 };
 function renderSearch(){
