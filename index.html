@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Trading">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Trading App Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -185,6 +188,16 @@ button{font:inherit;color:inherit;cursor:pointer}
 .trade small{font:500 15px var(--num);opacity:.92}
 .sell{background:var(--red-solid)} .buy{background:var(--green-solid)}
 .sheet .btn.wide{margin-top:10px}
+/* Add to Home Screen hint */
+.a2-dev{display:inline-flex;align-items:center;height:28px;margin-bottom:16px;padding:0 10px;border-radius:8px;background:var(--l3);font:500 13px var(--sans);color:var(--fg)}
+.a2-install{margin:0 0 16px!important}
+.a2-steps{display:flex;flex-direction:column;gap:14px;margin:0;padding:0;list-style:none;counter-reset:a2}
+.a2-steps li{display:flex;align-items:flex-start;gap:12px;counter-increment:a2;font:400 15px/1.5 var(--sans);color:var(--fg)}
+.a2-steps li::before{content:counter(a2);flex:none;width:26px;height:26px;border-radius:50%;background:var(--l3);color:var(--strong);font:600 13px/26px var(--sans);text-align:center}
+.a2-steps b{font-weight:600;color:var(--strong)}
+.a2-ic{display:inline-grid;place-items:center;width:24px;height:24px;margin:0 2px;border-radius:6px;background:var(--l3);color:var(--strong);vertical-align:-6px}
+.a2-ic svg{width:16px;height:16px}
+.sheet .a2-skip{margin-top:20px;border-color:var(--l3);background:var(--l3)}
 
 .acc-top{display:flex;align-items:center;gap:10px}
 .acc-top b{font:600 19px var(--sans);color:var(--strong)}
@@ -617,6 +630,12 @@ button.mc:active{background:var(--l2)}
 .cellbtn:active{background:var(--l2)}
 .cellbtn b svg{width:15px;height:15px;margin-left:8px;vertical-align:-2px;color:var(--muted)}
 .legp i[data-a]{cursor:pointer}
+.pc-kind{justify-self:end;font:400 16px var(--sans);color:var(--fg)}
+.pc-grid b.up{color:var(--green)} .pc-grid b.dn{color:var(--red)}
+.pc-grid b.id{font-size:13px;overflow-wrap:anywhere}   /* 18-digit IDs side by side on a 375px phone */
+.pc-share{display:flex;justify-content:center;padding:8px 0 10px;border-top:1px solid var(--l3)}
+.pc-share button{width:48px;height:44px;display:grid;place-items:center;padding:0;border:0;background:none;color:var(--strong)}
+.pc-share svg{width:26px;height:26px}
 .pc-act{display:flex;border-top:1px solid var(--l3)}
 .pc-act button{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 2px;border:0;background:none;color:var(--strong);font:500 13px var(--sans);white-space:nowrap}
 .pc-act svg{width:24px;height:24px}
@@ -976,6 +995,8 @@ const I = {
   bell: sv('<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2H5z"/><path d="M10 20.5h4"/>'),
   user: sv('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/>'),
   theme: sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>'),
+  share3: sv('<circle cx="6" cy="12" r="2.5"/><circle cx="17" cy="6" r="2.5"/><circle cx="17" cy="18" r="2.5"/><path d="m8.2 10.8 6.6-3.6M8.2 13.2l6.6 3.6"/>'),
+  addhome: sv('<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8.5v7M8.5 12h7"/>'),
   fscreen: sv('<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>'),
   globe: sv('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.6 3.6 5.4 3.6 8.5s-1.2 5.9-3.6 8.5c-2.4-2.6-3.6-5.4-3.6-8.5S9.6 6.1 12 3.5z"/>'),
   help: sv('<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.5M12 16.8v.01"/>'),
@@ -1193,6 +1214,61 @@ const fsMark = () => document.querySelectorAll('[data-fs]').forEach(el => el.tex
 document.addEventListener('fullscreenchange', fsMark);
 document.addEventListener('webkitfullscreenchange', fsMark);
 
+/* "Add to Home Screen" hint: on a real phone or tablet in the browser, once, with steps for that device and browser */
+const A2KEY = 'proto-a2hs-skip';
+let a2Defer = null;                          // Android Chromium: the browser's own install prompt, kept for the Install button
+function a2Device(){
+  const ua = navigator.userAgent;
+  const ipad = /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const ios = ipad || /iPhone|iPod/.test(ua), android = /Android/.test(ua);
+  if (!ios && !android) return null;
+  const inapp = /FBAN|FBAV|Instagram|Line\/|Telegram/.test(ua);
+  const browser = inapp ? 'inapp' : ios
+    ? (/CriOS/.test(ua) ? 'chrome' : /FxiOS/.test(ua) ? 'firefox' : /EdgiOS/.test(ua) ? 'edge' : /OPiOS|OPT\//.test(ua) ? 'opera' : /YaBrowser/.test(ua) ? 'yandex' : /Safari/.test(ua) ? 'safari' : 'other')
+    : (/SamsungBrowser/.test(ua) ? 'samsung' : /EdgA/.test(ua) ? 'edge' : /Firefox/.test(ua) ? 'firefox' : /OPR|Opera/.test(ua) ? 'opera' : /YaBrowser/.test(ua) ? 'yandex' : /Chrome/.test(ua) ? 'chrome' : 'other');
+  return {ios, ipad, device:ipad ? 'iPad' : ios ? 'iPhone' : 'Android', browser};
+}
+const a2Standalone = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+const a2hsCan = () => !!a2Device() && !a2Standalone();
+const a2Skipped = () => { try { return localStorage.getItem(A2KEY) === '1'; } catch (e) { return false; } };
+function a2hsDone(){ try { localStorage.setItem(A2KEY, '1'); } catch (e) {} }
+const A2B = {safari:'Safari', chrome:'Chrome', firefox:'Firefox', edge:'Edge', opera:'Opera', yandex:'Yandex Browser', samsung:'Samsung Internet', inapp:'in-app browser', other:'browser'};
+const A2I = {
+  share:sv('<path d="M12 15V3.5M8 7.5l4-4 4 4M7 11H5.5v9.5h13V11H17"/>'),
+  add:sv('<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8.5v7M8.5 12h7"/>'),
+  dotsV:sv('<circle cx="12" cy="5.5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="18.5" r="1.2" fill="currentColor"/>'),
+  dotsH:sv('<circle cx="5.5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18.5" cy="12" r="1.2" fill="currentColor"/>'),
+  burger:sv('<path d="M4.5 7h15M4.5 12h15M4.5 17h15"/>')};
+const a2ic = k => `<i class="a2-ic">${A2I[k]}</i>`;
+function a2Steps(d){
+  const addIos = `Scroll down and tap ${a2ic('add')} <b>Add to Home Screen</b>`, okIos = 'Tap <b>Add</b>, then open the prototype from your Home Screen';
+  const safari = [`Tap ${a2ic('share')} <b>Share</b> ${d.ipad ? 'at the top right' : 'in the bottom bar'}`, addIos, okIos];
+  if (d.ios) return {
+    safari, chrome:[`Tap ${a2ic('share')} <b>Share</b> in the address bar`, `Tap ${a2ic('add')} <b>Add to Home Screen</b>`, okIos],
+    edge:[`Tap ${a2ic('dotsH')} <b>menu</b> at the bottom, then <b>Share</b>`, addIos, okIos],
+    firefox:[`Tap ${a2ic('burger')} <b>menu</b> at the bottom, then <b>Share</b>`, addIos, okIos]}[d.browser]
+    || [`Open this page in <b>Safari</b>: only Safari can add it to the Home Screen here`, ...safari];
+  const ok = 'Confirm with <b>Install</b> or <b>Add</b>, then open the prototype from your Home screen';
+  const chrome = [`Tap ${a2ic('dotsV')} <b>menu</b> at the top right`, 'Tap <b>Add to Home screen</b> or <b>Install app</b>', ok];
+  return {
+    chrome, samsung:[`Tap ${a2ic('burger')} <b>menu</b> at the bottom right`, 'Tap <b>Add page to</b> → <b>Home screen</b>', ok],
+    firefox:[`Tap ${a2ic('dotsV')} <b>menu</b>`, 'Tap <b>Add to Home screen</b> or <b>Install</b>', ok],
+    edge:[`Tap ${a2ic('dotsH')} <b>menu</b> at the bottom`, 'Tap <b>Add to phone</b>', ok],
+    inapp:['Open this page in <b>Chrome</b>: menu → <b>Open in browser</b>', ...chrome.slice(1)]}[d.browser]
+    || [`Open the ${A2B[d.browser]} <b>menu</b>`, 'Look for <b>Add to Home screen</b> or <b>Install app</b>', ok];
+}
+function a2hsSheet(){
+  const d = a2Device() || {ios:false, ipad:false, device:'Phone', browser:'other'};
+  return `<div class="sh-title"><b>Add to Home Screen</b><span>It opens like a real app: full screen, no browser bars, fixed portrait. That is the closest to how the product will feel.</span></div>
+    <div class="a2-dev">${d.device} · ${A2B[d.browser]}</div>
+    ${a2Defer ? '<button class="btn solid wide a2-install" data-a="a2hs-install">Install app</button>' : ''}
+    <ol class="a2-steps">${a2Steps(d).map(s => `<li><span>${s}</span></li>`).join('')}</ol>
+    <button class="btn wide a2-skip" data-a="a2hs-skip">Skip</button>`;
+}
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); a2Defer = e; if (state.sheet && state.sheet.kind === 'a2hs') openSheet('a2hs'); });
+addEventListener('appinstalled', () => { a2Defer = null; if (state.sheet && state.sheet.kind === 'a2hs') closeSheet(); });
+if (a2hsCan() && !a2Skipped()) setTimeout(() => { if (!state.sheet) openSheet('a2hs'); }, 1200);
+
 function render(resetScroll){
   const c = $('#content');
   $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.a === 'nav:' + state.nav));
@@ -1209,12 +1285,13 @@ function render(resetScroll){
 /* ---------- sheets ---------- */
 function openSheet(kind, s){
   state.sheet = {kind, s};
-  $('#sheet').innerHTML = '<div class="grab"></div>' + (kind === 'sltp' ? sltpSheet() : kind === 'opts' ? optSheet(s) : kind === 'insf' ? insfSheet() : kind === 'ctrade' ? ctradeSheet(s) : kind === 'chart' ? chartSheet() : kind === 'draw' ? drawSheet() : accSheet());
+  $('#sheet').innerHTML = '<div class="grab"></div>' + (kind === 'a2hs' ? a2hsSheet() : kind === 'sltp' ? sltpSheet() : kind === 'opts' ? optSheet(s) : kind === 'insf' ? insfSheet() : kind === 'ctrade' ? ctradeSheet(s) : kind === 'chart' ? chartSheet() : kind === 'draw' ? drawSheet() : accSheet());
   $('#sheet').scrollTop = 0;
   phone.classList.add('sheet-open');
   if (kind === 'sltp') updateSltpSheet();
 }
 function closeSheet(){
+  if (state.sheet && state.sheet.kind === 'a2hs') a2hsDone();   // closing the hint any way counts as Skip
   phone.classList.remove('sheet-open'); state.sheet = null;
 }
 
@@ -1372,7 +1449,12 @@ function goTab(n, instant){
   const view = $('#iView'), p = $('#iPages'), ind = $('#iInd');
   let sx = 0, sy = 0, dx = 0, t0 = 0, down = false, lock = null, moved = false;
   view.addEventListener('pointerdown', e => {
-    if ((e.pointerType === 'mouse' && e.button !== 0) || e.target.closest('input, #chartBox, #cTool, .cot-top')) return;   // the chart pans itself
+    if ((e.pointerType === 'mouse' && e.button !== 0) || e.target.closest('input, #cTool, .cot-top')) return;
+    const cb = e.target.closest('#chartBox');
+    if (cb) {                                  // the chart pans itself; a swipe that starts on the price scale (right edge) turns the page
+      let edge = 56; try { edge = Math.max(edge, CH.chart.priceScale('right').width()); } catch (err) {}
+      if (e.clientX < cb.getBoundingClientRect().right - edge) return;
+    }
     down = true; lock = null; moved = false; dx = 0; sx = e.clientX; sy = e.clientY; t0 = performance.now();
   });
   view.addEventListener('pointermove', e => {
@@ -2492,12 +2574,39 @@ function renderTrades(top){
   if (b.offsetWidth) { ind.style.width = b.offsetWidth + 'px'; ind.style.transform = `translateX(${b.offsetLeft}px)`; revealTab($('#trdTabs'), b); }
   body.innerHTML = t === 'positions' ? `<div class="scr-cards">${P.map(posCard).join('') || emptyNote('No open positions', 'Open any instrument and place a market order on the Ticket tab.')}</div>`
     : t === 'pending' ? `<div class="scr-cards">${O.map(ordCard).join('') || emptyNote('No pending orders', 'Choose Pending on the Ticket tab to place a limit or stop order.')}</div>`
-    : t === 'trades' ? trdFills() : insClosed(tradeStats(CLOSED));
+    : t === 'trades' ? trdFills() : trdClosed();
   const ca = $('#closeAll'); ca.hidden = !((t === 'positions' && P.length) || (t === 'pending' && O.length));
   $('#caLabel').textContent = t === 'pending' ? 'Cancel All' : 'Close All';
   body.classList.toggle('pad', !ca.hidden);
   if (top) body.scrollTop = 0;
   updateAccount();
+}
+// Closed Positions tab: expandable cards like the open ones (the insight sheet stays in Insights)
+function trdClosed(){
+  const T = tradeStats(CLOSED);
+  return `<div class="lsum"><span>${T.n} closed positions</span><span class="${cls(T.net)}">${sUsd(T.net)}</span></div>`
+    + `<div class="scr-cards">${[...CLOSED].reverse().map(closedCard).join('') || emptyNote('No closed positions', 'Positions you close show up here.')}</div>`;
+}
+function closedCard(t){
+  const i = BY[t.s], k = CLOSED.indexOf(t), id = 'c' + k, open = state.trdOpen.has(id), c = tradeCosts(t), dir = t.side === 'buy' ? 1 : -1;
+  const lvl = (v, f) => v == null || v === false ? '-' : fmt(v === true ? t.open * (1 - dir * f) : v, i.dg);   // demo rows only know "SL was set"
+  const pid = '910633595169' + String(300000 + k * 7919 % 600000).padStart(6, '0'), oid = '910902510793' + String(400000 + k * 6113 % 500000).padStart(6, '0');
+  return `<div class="pcard${open ? ' pc-open' : ''}">
+    <div class="pc-h" data-a="pc-toggle:${id}">
+      <span class="pc-sym">${icon(i)}${t.s}</span><span class="plp" data-s="${t.pnl >= 0 ? 'up' : 'dn'}">${usd(t.pnl)}</span>
+      <button class="pc-chev" aria-label="${open ? 'Hide' : 'Show'} details" aria-expanded="${open}">${I.chevDown}</button>
+      <span class="pc-sub"><span class="sp-${t.side}">${t.side}</span>${fmt(t.lots, 2)} <em>Lots</em></span><span class="pc-kind">Market</span>
+    </div>
+    <div class="pc-body"><div class="pc-in">
+      <div class="pc-px"><div><span class="lab">Entry Price</span><b>${fmt(t.open, i.dg)}</b><small>${ts(new Date(t.at - t.dur * 6e4))}</small></div>${I.arrowR}
+        <div class="r"><span class="lab">Exit Price</span><b>${fmt(t.close, i.dg)}</b><small>${ts(t.at)}</small></div></div>
+      <div class="pc-grid">
+        <div><span>Stop Loss</span><b>${lvl(t.sl, .01)}</b></div><div><span>Take Profit</span><b>${lvl(t.tp, -.02)}</b></div>
+        <div><span>Swaps / Fee</span><b>${usd(c.swap)} / ${usd(c.fee)}</b></div><div><span>Net P&amp;L</span><b class="${cls(t.pnl)}">${usd(t.pnl)}</b></div>
+        <div><span>Order ID</span><b class="id">${oid}</b></div><div><span>Position ID</span><b class="id">${pid}</b></div>
+      </div>
+      <div class="pc-share"><button data-a="toast:Sharing comes in the next iteration" aria-label="Share">${I.share3}</button></div>
+    </div></div></div>`;
 }
 function posCard(q){
   const i = BY[q.s], open = state.trdOpen.has('p' + q.id), u = q.lots * CS[i.c];
@@ -2560,7 +2669,7 @@ function trdFills(){
 }
 function realize(q, lots){          // closes `lots` of position q at the market; P&L goes to the balance and to Closed Positions
   const i = BY[q.s], pl = +(posPL(q) * lots / q.lots).toFixed(2);
-  CLOSED.push({s:q.s, side:q.side, lots, open:q.entry, close:q.side === 'buy' ? i.bid : ask(i), pnl:pl, at:new Date(), dur:Math.max(1, Math.round((Date.now() - q.at) / 6e4)), sl:q.sl != null});
+  CLOSED.push({s:q.s, side:q.side, lots, open:q.entry, close:q.side === 'buy' ? i.bid : ask(i), pnl:pl, at:new Date(), dur:Math.max(1, Math.round((Date.now() - q.at) / 6e4)), sl:q.sl, tp:q.tp});
   ACC.balance = +(ACC.balance + pl).toFixed(2);
   return pl;
 }
@@ -2616,6 +2725,7 @@ function openMenu(){
       ${row(I.theme, 'Appearance', 'toast:The prototype uses the dark theme', '<em>Dark</em>')}
       ${row(I.globe, 'Language', 'toast:More languages come in the next iteration', '<em>English</em>')}
       ${fsOk() ? row(I.fscreen, 'Full screen', 'fullscreen', `<em data-fs>${fsEl() ? 'On' : 'Off'}</em>`) : ''}
+      ${a2hsCan() ? row(I.addhome, 'Add to Home Screen', 'a2hs-open') : ''}
     </div>
     <div class="mlist">
       ${row(I.help, 'Help', soon('Help center'))}
@@ -2898,6 +3008,12 @@ phone.addEventListener('click', e => {
   if (a === 'place') placeOrder();
   if (a === 'acct') openSheet('acc');
   if (a === 'fullscreen') toggleFs();
+  if (a === 'a2hs-open') { closeMenu && closeMenu(); openSheet('a2hs'); }
+  if (a === 'a2hs-skip') closeSheet();
+  if (a === 'a2hs-install' && a2Defer) {
+    const p = a2Defer; a2Defer = null; p.prompt();
+    p.userChoice.then(r => { if (r.outcome === 'accepted') closeSheet(); else if (state.sheet && state.sheet.kind === 'a2hs') openSheet('a2hs'); });
+  }
   if (a === 'close') { closeSheet(); closeDlg(); }
   if (a === 'toast') toast(v);
   if (a === 'search') openSearch('open', true);
