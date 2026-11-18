@@ -45,17 +45,13 @@
 html,body{margin:0;height:100%;background:#000}
 body{font-family:var(--sans);color:var(--fg);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow:hidden}
 button{font:inherit;color:inherit;cursor:pointer}
-.stage{height:100dvh;display:flex;align-items:center;justify-content:center}
-.phone{position:relative;width:100%;height:100dvh;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
-
-/* landscape on a phone (class set by keepPortrait): the portrait app, turned to stay upright against the device */
-.rot .stage{position:fixed;inset:0;display:block;padding:0}
-.rot .phone{position:absolute;top:50%;left:50%;width:100vh;width:100dvh;height:100vw;transform:translate(-50%,-50%) rotate(var(--rot));
-  --st:max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px));--hb:0px}
+/* pinned to the real window edges: 100dvh can lag behind in full screen / home-screen mode and leave a gap under the menu */
+.stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+.phone{position:relative;width:100%;height:100%;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
 
 /* fake iOS status bar — only inside the desktop phone frame */
 .statusbar{display:none}
-.homebar{flex:none;height:var(--hb);background:var(--l2)}
+.homebar{flex:none;height:max(0px, calc(var(--hb) - 14px));background:var(--l2)}   /* the menu's own bottom padding covers part of the home-indicator zone */
 
 @media (min-width:600px) and (min-height:640px){
   body{background:radial-gradient(1200px 700px at 50% 20%,#15161c 0%,#050506 60%)}
@@ -1187,16 +1183,6 @@ function placeInd(scroll){
   requestAnimationFrame(() => $('#tabs').classList.add('ready'));
 });
 addEventListener('resize', () => placeInd());
-// phone turned sideways: the web can't lock orientation, so turn the app back against the device and keep it portrait
-function keepPortrait(){
-  const land = innerWidth > innerHeight && matchMedia('(pointer:coarse)').matches && Math.min(innerWidth, innerHeight) < 600;
-  const a = screen.orientation ? screen.orientation.angle : (window.orientation || 0);   // 90: top of the phone on the left
-  document.documentElement.classList.toggle('rot', land);
-  document.documentElement.style.setProperty('--rot', (a === 270 || a === -90 ? 90 : -90) + 'deg');
-}
-addEventListener('resize', keepPortrait);
-if (screen.orientation) screen.orientation.addEventListener('change', keepPortrait);
-keepPortrait();
 // full screen without adding to the home screen: Fullscreen API (Android Chrome, iPad; iPhone Safari has none, so the row is hidden there)
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
 const fsOk = () => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
