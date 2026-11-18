@@ -976,6 +976,7 @@ const I = {
   bell: sv('<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2H5z"/><path d="M10 20.5h4"/>'),
   user: sv('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/>'),
   theme: sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>'),
+  fscreen: sv('<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>'),
   globe: sv('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.6 3.6 5.4 3.6 8.5s-1.2 5.9-3.6 8.5c-2.4-2.6-3.6-5.4-3.6-8.5S9.6 6.1 12 3.5z"/>'),
   help: sv('<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.5M12 16.8v.01"/>'),
   doc: sv('<path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6"/>'),
@@ -1175,6 +1176,22 @@ function keepPortrait(){
 addEventListener('resize', keepPortrait);
 if (screen.orientation) screen.orientation.addEventListener('change', keepPortrait);
 keepPortrait();
+// full screen without adding to the home screen: Fullscreen API (Android Chrome, iPad; iPhone Safari has none, so the row is hidden there)
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const fsOk = () => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+async function toggleFs(){
+  const d = document.documentElement;
+  try {
+    if (fsEl()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else {
+      await (d.requestFullscreen || d.webkitRequestFullscreen).call(d, {navigationUI:'hide'});
+      try { await screen.orientation.lock('portrait'); } catch (e) {}   // a real lock works only in full screen
+    }
+  } catch (e) { toast('Full screen is not available in this browser'); }
+}
+const fsMark = () => document.querySelectorAll('[data-fs]').forEach(el => el.textContent = fsEl() ? 'On' : 'Off');
+document.addEventListener('fullscreenchange', fsMark);
+document.addEventListener('webkitfullscreenchange', fsMark);
 
 function render(resetScroll){
   const c = $('#content');
@@ -2598,6 +2615,7 @@ function openMenu(){
     <div class="mlist">
       ${row(I.theme, 'Appearance', 'toast:The prototype uses the dark theme', '<em>Dark</em>')}
       ${row(I.globe, 'Language', 'toast:More languages come in the next iteration', '<em>English</em>')}
+      ${fsOk() ? row(I.fscreen, 'Full screen', 'fullscreen', `<em data-fs>${fsEl() ? 'On' : 'Off'}</em>`) : ''}
     </div>
     <div class="mlist">
       ${row(I.help, 'Help', soon('Help center'))}
@@ -2879,6 +2897,7 @@ phone.addEventListener('click', e => {
   if (a === 'slreset') { const c = slCtx(); if (c) c.o[v] = null; refreshSltp(); }   // no focus: on a phone it would pop the keyboard
   if (a === 'place') placeOrder();
   if (a === 'acct') openSheet('acc');
+  if (a === 'fullscreen') toggleFs();
   if (a === 'close') { closeSheet(); closeDlg(); }
   if (a === 'toast') toast(v);
   if (a === 'search') openSearch('open', true);
