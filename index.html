@@ -399,6 +399,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .fieldbox:focus-within{border-color:var(--brand)}
 .fieldbox input{flex:1;min-width:0;height:100%;padding:0 4px 0 16px;background:none;border:0;outline:0;color:var(--strong);font:600 19px var(--num)}
 .fieldbox input::placeholder{font:500 16px var(--sans);color:var(--muted)}
+.fieldbox input[data-tkrisk]::placeholder{font:600 19px var(--num)}   /* the computed max risk reads as a number, greyed */
 .slrow .fieldbox{background:var(--l2)}     /* a step lighter than its card, as the ticket box is against the page */
 /* SL / TP checkbox chips in the ticket; tapping one opens the SL/TP sheet */
 .legs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -1996,6 +1997,13 @@ const units = () => +(state.tk.lots * CS[BY[state.inst].c]).toFixed(2);
 const legPL = k => (state.tk[k] - entry()) * units() * (state.tk.side === 'buy' ? 1 : -1);
 const signed = (v, dg = 2) => (v >= 0 ? '+' : '−') + fmt(Math.abs(v), dg);
 function resetTicket(){ state.tk = {side:'buy', type:'market', price:0, lots:.01, sl:null, tp:null, risk:null, riskMode:'usd'}; }
+// what the ticket's trade can lose: at the SL, or with no SL until Stop Out (margin used reaches 144% of equity; a buy can't lose more than its value)
+function tkMaxRisk(){
+  const t = state.tk, i = BY[state.inst], e = entry(), u = units();
+  if (t.sl != null) return Math.abs(legPL('sl'));
+  const loss = Math.max(0, ACC.balance + pnl() - (margin() + u * e * parseFloat(i.mg) / 100) / 1.44);
+  return t.side === 'buy' ? Math.min(loss, u * e) : loss;
+}
 // Risk (kept in $) + SL set: the volume is whatever loses the risk at the SL, rounded down to 0.01 lot
 function syncRiskLots(){
   const t = state.tk; if (t.risk == null || t.sl == null) return false;
@@ -2065,9 +2073,11 @@ function updateTicket(){
   }
   const rin = $('#pTicket [data-tkrisk]');
   if (rin) {
-    const on = t.risk != null;
-    if (document.activeElement !== rin) rin.value = on ? (t.riskMode === 'pct' ? (t.risk / ACC.balance * 100).toFixed(2) : fmt(t.risk, 2)) : '';
+    const on = t.risk != null, pm = t.riskMode === 'pct';
+    if (document.activeElement !== rin) rin.value = on ? (pm ? (t.risk / ACC.balance * 100).toFixed(2) : fmt(t.risk, 2)) : '';
     $('#pTicket [data-a="tkriskclr"]').hidden = !on;
+    const mx = tkMaxRisk();                   // not typed in: show what the trade can lose now, greyed
+    rin.placeholder = pm ? (mx / ACC.balance * 100).toFixed(2) : fmt(mx, 2);
   }
   updateSltpSheet();
   syncLines();                                // ticket drafts on the chart
@@ -2177,6 +2187,8 @@ function slChanged(){        // redraw whatever shows the levels behind the shee
   updateSltpSheet();
   syncLines();
 }
+// Price / % buttons don't take focus from the field, so an open keyboard stays open
+$('#sheet').addEventListener('mousedown', e => { if (e.target.closest('.slrow .unit button')) e.preventDefault(); });
 function refreshSltp(){
   if (state.sheet && state.sheet.kind === 'sltp') $('#sheet').innerHTML = '<div class="grab"></div>' + sltpSheet();
   slChanged();
@@ -2992,9 +3004,27 @@ phone.addEventListener('click', e => {
   if (a === 'step') { const [k, d] = v.split(':'); stepTk(k, +d); }
   if (a === 'tkriskmode') { state.tk.riskMode = v; renderTicket(); }
   if (a === 'tkriskclr') { state.tk.risk = null; updateTicket(); const f = $('#pTicket [data-tkrisk]'); if (f) f.focus({preventScroll:true}); }
-  if (a === 'sltp') { state.slT = null; if (state.tk[v] == null) state.tk[v] = v === 'sl' ? slDef() : tpDef(); renderTicket(); openSheet('sltp'); }
+  if (a === 'sltp') {
+    state.slT = null; if (state.tk[v] == null) state.tk[v] = v === 'sl' ? slDef() : tpDef(); renderTicket(); openSheet('sltp');
+    // focus the leg that was tapped right here, inside the tap: phones open the keyboard only for a focus made by the gesture itself
+    const f = $(`#sheet [data-sl="${v}"]`);
+    if (f) { f.focus({preventScroll:true}); const n = f.value.length; try { f.setSelectionRange(n, n); } catch (err) {} }
+  }
   if (a === 'slpos') openSltp({kind:v[0] === 'p' ? 'pos' : 'ord', id:+v.slice(1)});
-  if (a === 'slmode') { const [k, m] = v.split(':'), c = slCtx(); if (c) c.o[k + 'Mode'] = m; refreshSltp(); }
+  if (a === 'slmode') {          // update in place: rebuilding the sheet would drop the focused field and close the keyboard
+    const [k, m] = v.split(':'), c = slCtx(), act = document.activeElement, keep = act && act.dataset && act.dataset.sl ? act : null;
+    if (c) {
+      c.o[k + 'Mode'] = m;
+      const row = $(`#sheet .slrow.${k}`), inp = row && row.querySelector('[data-sl]');
+      if (row) {
+        row.querySelectorAll('.unit button').forEach(b => { const on = b.dataset.a === `slmode:${k}:${m}`; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+        inp.placeholder = LEGPH[m][0]; inp.setAttribute('aria-label', `${k === 'sl' ? 'Stop loss' : 'Take profit'}, ${LEGPH[m][1]}`);
+        if (c.o[k] != null) inp.value = m === 'pct' ? pctOf(k, c).toFixed(2) : fmt(c.o[k], c.i.dg);
+      }
+      slChanged();
+      if (keep) { keep.focus({preventScroll:true}); const n = keep.value.length; try { keep.setSelectionRange(n, n); } catch (err) {} }
+    }
+  }
   if (a === 'slreset') { const c = slCtx(); if (c) c.o[v] = null; refreshSltp(); }   // no focus: on a phone it would pop the keyboard
   if (a === 'place') placeOrder();
   if (a === 'acct') openSheet('acc');
