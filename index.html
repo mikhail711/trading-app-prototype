@@ -52,6 +52,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* fake iOS status bar — only inside the desktop phone frame */
 .statusbar{display:none}
 .phone.kb{--hb:0px}   /* keyboard up: no home-indicator padding above it */
+.phone.kb .ibar,.phone.kb .nav,.phone.kb .homebar{display:none}   /* nor tab bars: the room goes to the field being edited */
 .homebar{flex:none;height:max(0px, calc(var(--hb) - 14px));background:var(--l2)}   /* the menu's own bottom padding covers part of the home-indicator zone */
 
 @media (min-width:600px) and (min-height:640px){
@@ -1199,11 +1200,16 @@ if (window.visualViewport) {
     st.style.height = kb ? vv.height + 'px' : '';
     st.style.transform = kb && vv.offsetTop ? `translateY(${vv.offsetTop}px)` : '';
     phone.classList.toggle('kb', kb);
-    const a = document.activeElement, sh = $('#sheet');
-    if (kb && a && sh.contains(a)) {             // keep the focused field in sight inside the sheet
-      const r = a.getBoundingClientRect(), s = sh.getBoundingClientRect();
-      if (r.bottom > s.bottom - 16) sh.scrollTop += r.bottom - s.bottom + 16;
-      else if (r.top < s.top + 48) sh.scrollTop -= s.top + 48 - r.top;
+    const a = document.activeElement;
+    if (kb && a && a.matches('input, textarea')) {  // keep the focused field in sight inside whatever scrolls it (sheet, ticket, …)
+      let box = a.parentElement;
+      while (box && box !== phone && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+      if (box && box !== phone) {
+        const r = a.getBoundingClientRect(), s = box.getBoundingClientRect();
+        const pin = box.querySelector('.place-wrap'), cover = pin ? pin.getBoundingClientRect().height : 0;   // sticky Buy/Sell button over the bottom
+        if (r.bottom > s.bottom - cover - 16) box.scrollTop += r.bottom - (s.bottom - cover - 16);
+        else if (r.top < s.top + 48) box.scrollTop -= s.top + 48 - r.top;
+      }
     }
   };
   vv.addEventListener('resize', fit);
