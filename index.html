@@ -51,6 +51,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 /* fake iOS status bar — only inside the desktop phone frame */
 .statusbar{display:none}
+.phone.kb{--hb:0px}   /* keyboard up: no home-indicator padding above it */
 .homebar{flex:none;height:max(0px, calc(var(--hb) - 14px));background:var(--l2)}   /* the menu's own bottom padding covers part of the home-indicator zone */
 
 @media (min-width:600px) and (min-height:640px){
@@ -1106,6 +1107,8 @@ const state = {nav:'home', tab:'all', sTab:'all', fav:new Set(['BTCUSD','EURUSD'
 const nf = {};
 const fmt = (v, dg) => (nf[dg] ||= new Intl.NumberFormat('en-US',{minimumFractionDigits:dg, maximumFractionDigits:dg})).format(v);
 const usd = v => (v < 0 ? '−$' : '$') + fmt(Math.abs(v), 2);
+// typed number → digits and a dot: "621,5" from a comma-decimal keyboard (iOS in Russian) is 621.5; "63,118.20" (our own format) keeps the comma as thousands
+const numStr = s => (s.includes('.') ? s.replace(/,/g, '') : s.replace(/,/g, '.')).replace(/[^\d.]/g, '');
 const pct = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
 const ask = i => i.bid + i.sp * 10 ** -i.dg;
 const posPL = q => { const i = BY[q.s]; return (q.side === 'buy' ? i.bid - q.entry : q.entry - ask(i)) * q.lots * CS[i.c]; };
@@ -1186,6 +1189,26 @@ function placeInd(scroll){
   requestAnimationFrame(() => $('#tabs').classList.add('ready'));
 });
 addEventListener('resize', () => placeInd());
+// on-screen keyboard: iOS lays it over the page (and pans the page to the field) instead of shrinking it,
+// so a bottom sheet ends up under it. Fit the app to the visible part above the keyboard and follow the pan.
+if (window.visualViewport) {
+  const vv = visualViewport, st = document.querySelector('.stage');
+  const fit = () => {
+    const kb = innerHeight - vv.height > 80;
+    st.style.bottom = kb ? 'auto' : '';
+    st.style.height = kb ? vv.height + 'px' : '';
+    st.style.transform = kb && vv.offsetTop ? `translateY(${vv.offsetTop}px)` : '';
+    phone.classList.toggle('kb', kb);
+    const a = document.activeElement, sh = $('#sheet');
+    if (kb && a && sh.contains(a)) {             // keep the focused field in sight inside the sheet
+      const r = a.getBoundingClientRect(), s = sh.getBoundingClientRect();
+      if (r.bottom > s.bottom - 16) sh.scrollTop += r.bottom - s.bottom + 16;
+      else if (r.top < s.top + 48) sh.scrollTop -= s.top + 48 - r.top;
+    }
+  };
+  vv.addEventListener('resize', fit);
+  vv.addEventListener('scroll', fit);
+}
 // full screen without adding to the home screen: Fullscreen API (Android Chrome, iPad; iPhone Safari has none, so the row is hidden there)
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
 const fsOk = () => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
@@ -2091,14 +2114,14 @@ function stepTk(k, d){
 }
 phone.addEventListener('change', e => {
   const k = e.target.dataset && e.target.dataset.in; if (!k || !state.tk) return;
-  const i = BY[state.inst], n = parseFloat(e.target.value.replace(/[^\d.]/g, ''));
+  const i = BY[state.inst], n = parseFloat(numStr(e.target.value));
   if (isFinite(n) && n > 0) state.tk[k] = k === 'lots' ? Math.max(.01, +n.toFixed(2)) : rp(n, i);
   renderTicket();
 });
 // Risk field: typing updates in place (no re-render, so the field keeps focus); empty means "not set"
 phone.addEventListener('input', e => {
   if (!e.target.dataset || !('tkrisk' in e.target.dataset) || !state.tk) return;
-  const t = state.tk, n = parseFloat(e.target.value.replace(/[^\d.]/g, ''));
+  const t = state.tk, n = parseFloat(numStr(e.target.value));
   t.risk = isFinite(n) && n > 0 ? (t.riskMode === 'pct' ? ACC.balance * n / 100 : n) : null;
   if (t.risk != null && t.sl == null) t.sl = slDef();          // the volume is sized from the SL distance
   updateTicket();
@@ -2198,7 +2221,7 @@ function openSltp(target){ state.slT = target; openSheet('sltp'); }
 phone.addEventListener('input', e => {
   const k = e.target.dataset && e.target.dataset.sl; if (!k) return;
   const c = slCtx(); if (!c) return;
-  const raw = e.target.value.replace(/[^\d.]/g, ''), n = parseFloat(raw);
+  const raw = numStr(e.target.value), n = parseFloat(raw);
   const m = legMode(k, c);
   c.o[k] = raw && isFinite(n) && n > 0 ? (m === 'pct' ? priceFromPct(k, n, c) : rp(n, c.i)) : null;
   if (c.o[k] != null && c.o[k] <= 0) c.o[k] = null;
@@ -2206,7 +2229,7 @@ phone.addEventListener('input', e => {
 });
 phone.addEventListener('input', e => {
   if (!e.target.dataset || e.target.dataset.cot !== 'lots') return;
-  const c = state.cot, n = parseFloat(e.target.value.replace(/[^\d.]/g, ''));
+  const c = state.cot, n = parseFloat(numStr(e.target.value));
   if (!isFinite(n) || n <= 0) return;
   if (c.risk) c.maxRisk = n; else c.lots = Math.max(.01, +n.toFixed(2));
   cotApply();
